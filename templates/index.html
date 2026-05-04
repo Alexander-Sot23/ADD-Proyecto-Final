@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monitor de Temperatura y Humedad</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 20px;
+            background-color: #f8f9fa;
+        }
+
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        table {
+            width: 100%;
+            max-width: 800px;
+            margin: 0 auto;
+            border-collapse: collapse;
+            background-color: white;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        th,
+        td {
+            padding: 12px 15px;
+            text-align: center;
+            border-bottom: 1px solid #ddd;
+        }
+
+        th {
+            background-color: #2c3e50;
+            color: white;
+        }
+
+        tr:hover {
+            background-color: #f1f1f1;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .refresh {
+            text-align: center;
+            margin: 20px 0;
+        }
+
+        .last-update {
+            text-align: center;
+            color: #666;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>Monitor de Temperatura y Humedad - ESP32</h1>
+
+        <div class="refresh">
+            <button onclick="location.reload()">Actualizar Datos</button>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Fecha y Hora</th>
+                    <th>Temperatura (°C)</th>
+                    <th>Humedad (%)</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for l in lecturas %}
+                <tr>
+                    <td>{{ l.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                    <td>{{ "%.1f" | format(l.temperatura) }}</td>
+                    <td>{{ "%.1f" | format(l.humedad) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <div class="last-update">
+            Mostrando las últimas 50 lecturas •
+            <a href="#" onclick="location.reload(); return false;">Actualizar ahora</a>
+        </div>
+    </div>
+</body>
+
+</html>
