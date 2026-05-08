@@ -5,8 +5,8 @@ import urequests
 import time
 
 # ================== CONFIGURACIÓN DE RED ==================
-SSID = "Desktop-HP A" 
-PASSWORD = "CIDGAR23"
+SSID = "SSID" 
+PASSWORD = "PASSWORD"
 
 # IP de la computadora
 SERVER_URL = "http://192.168.137.1:5000/data"
