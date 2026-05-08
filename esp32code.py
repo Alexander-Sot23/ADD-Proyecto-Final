@@ -5,28 +5,37 @@ import urequests
 import time
 
 # ================== CONFIGURACIÓN DE RED ==================
-SSID = "SSID_WIFI" 
-PASSWORD = "CONTRASEÑA"
+SSID = "Desktop-HP A" 
+PASSWORD = "CIDGAR23"
 
 # IP de la computadora
-SERVER_URL = "http://192.168.1.XXX:5000/data"
+SERVER_URL = "http://192.168.137.1:5000/data"
 
-# Configuracion del sensor DHT11
 sensor_pin = 4
-sensor = dht.DHT11(machine.Pin(sensor_pin))
+led_pin = 2
 
-# Tiempo entre lecturas
-INTERVALO_SEGUNDOS = 30
+sensor = dht.DHT11(machine.Pin(sensor_pin))
+led = machine.Pin(led_pin, machine.Pin.OUT)
+
+INTERVALO_SEGUNDOS = 15
+# ===================================================
+
+def blink_led(times=2, delay=0.2):
+    """Parpadea el LED para indicar actividad"""
+    for _ in range(times):
+        led.value(1)
+        time.sleep(delay)
+        led.value(0)
+        time.sleep(delay)
 
 def connect_wifi():
     wlan = network.WLAN(network.STA_IF)
     wlan.active(True)
     
     if wlan.isconnected():
-        print("Ya conectado. IP:", wlan.ifconfig()[0])
         return True
     
-    print("Conectando a WiFi...")
+    print("Conectando a WiFi:", SSID)
     wlan.connect(SSID, PASSWORD)
     
     timeout = 20
@@ -37,49 +46,59 @@ def connect_wifi():
     
     if wlan.isconnected():
         print("\n¡Conectado! IP:", wlan.ifconfig()[0])
+        blink_led(3, 0.1)        # Parpadeo rápido = conectado
         return True
     else:
-        print("\nNo se pudo conectar al WiFi")
+        print("\nNo se pudo conectar")
         return False
 
 def send_data(temp, hum):
     try:
         payload = {"temp": temp, "hum": hum}
-        response = urequests.post(
-            SERVER_URL,
-            json=payload,
-            headers={"Content-Type": "application/json"},
-            timeout=10
-        )
-        print("Datos enviados → {:.1f}°C | {:.1f}% → Código: {}".format(
-            temp, hum, response.status_code))
-        response.close()
-        return True
+        response = urequests.post(SERVER_URL, json=payload, timeout=10)
+        
+        if response.status_code == 200:
+            print("Enviado correctamente")
+            blink_led(2, 0.1)      # Parpadeo = datos enviados OK
+            response.close()
+            return True
+        else:
+            print("Error HTTP:", response.status_code)
+            response.close()
+            return False
+            
     except Exception as e:
-        print("Error al enviar datos:", e)
+        print("Error enviando datos:", e)
+        blink_led(1, 0.5)          # Parpadeo lento = error
         return False
-    
 
 # ====================== INICIO ======================
-print("Iniciando sistema con DHT11...")
+print("Iniciando ESP32-S3 + DHT11 + LED...")
 
-if connect_wifi():
-    print("Iniciando bucle de lecturas cada {} segundos...".format(INTERVALO_SEGUNDOS))
+# Primer intento de conexión
+if not connect_wifi():
+    print("Intentando reconectar más tarde...")
+
+print("Iniciando bucle principal...")
+
+while True:
+    # Verificar y reconectar WiFi si es necesario
+    if not network.WLAN(network.STA_IF).isconnected():
+        print("WiFi perdido. Reconectando...")
+        connect_wifi()
     
-    while True:
-        try:
-            sensor.measure()
-            temp = sensor.temperature()
-            hum = sensor.humidity()
-            
-            print("Lectura exitosa → Temp: {:.1f}°C | Hum: {:.1f}%".format(temp, hum))
-            send_data(temp, hum)
-            
-        except OSError as e:
-            print("Error leyendo el sensor DHT11 (intento en próximo ciclo):", e)
-        except Exception as e:
-            print("Error inesperado:", e)
+    try:
+        sensor.measure()
+        temp = sensor.temperature()
+        hum = sensor.humidity()
         
-        time.sleep(INTERVALO_SEGUNDOS)
-else:
-    print("Sin conexión WiFi. Reinicia la ESP32.")
+        print(f"Lectura → {temp:.1f}°C | {hum:.1f}%")
+        send_data(temp, hum)
+        
+    except OSError as e:
+        print("Error sensor:", e)
+        blink_led(1, 0.8)   # Parpadeo largo = error sensor
+    except Exception as e:
+        print("Error inesperado:", e)
+    
+    time.sleep(INTERVALO_SEGUNDOS)
