@@ -4,95 +4,456 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Monitor de Temperatura y Humedad</title>
+    <title>Monitor ESP32 · Temperatura y Humedad</title>
     <style>
+        :root {
+            --bg:      #0f1117;
+            --surface: #1a1d27;
+            --card:    #22263a;
+            --accent:  #4f8ef7;
+            --accent2: #38d9a9;
+            --text:    #e8eaf0;
+            --muted:   #8890a4;
+            --border:  #2e3248;
+            --radius:  12px;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            margin: 20px;
-            background-color: #f8f9fa;
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
         }
 
-        h1 {
-            color: #333;
-            text-align: center;
-            margin-bottom: 30px;
+        header {
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+            padding: 18px 32px;
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+        header h1  { font-size: 1.3rem; font-weight: 700; }
+        header span { font-size: 0.85rem; color: var(--muted); margin-top: 2px; display: block; }
+
+        main {
+            max-width: 960px;
+            margin: 32px auto;
+            padding: 0 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
         }
 
-        table {
-            width: 100%;
-            max-width: 800px;
-            margin: 0 auto;
-            border-collapse: collapse;
-            background-color: white;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        .metrics {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
         }
 
-        th,
-        td {
-            padding: 12px 15px;
-            text-align: center;
-            border-bottom: 1px solid #ddd;
+        .metric-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 20px 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .metric-card .label {
+            font-size: 0.78rem;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: .06em;
+        }
+        .metric-card .value      { font-size: 2rem; font-weight: 700; }
+        .metric-card .value.temp { color: #f4a261; }
+        .metric-card .value.hum  { color: var(--accent2); }
+        .metric-card .value.inter{ color: var(--accent); }
+        .metric-card .sub        { font-size: 0.8rem; color: var(--muted); }
+
+        .config-panel {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 20px 24px;
+        }
+        .config-panel h2 { font-size: 1rem; margin-bottom: 14px; color: var(--muted); }
+
+        .config-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .config-row label { font-size: 0.9rem; }
+        .config-row input[type="number"] {
+            width: 90px;
+            padding: 8px 10px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            background: var(--surface);
+            color: var(--text);
+            font-size: 0.95rem;
         }
 
+        .btn {
+            padding: 8px 18px;
+            border-radius: 8px;
+            border: none;
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: 600;
+            transition: opacity .15s, transform .1s;
+        }
+        .btn:hover           { opacity: .85; }
+        .btn:active          { transform: scale(.97); }
+        .btn:disabled        { opacity: .35; cursor: not-allowed; }
+        .btn-primary         { background: var(--accent); color: #fff; }
+        .btn-secondary       { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+
+        #config-msg { font-size: 0.85rem; color: var(--accent2); display: none; }
+
+        .status-bar {
+            font-size: 0.8rem;
+            color: var(--muted);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .status-dot {
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            background: var(--muted);
+            transition: background .3s;
+        }
+        .status-dot.active { background: var(--accent2); }
+
+        .table-wrap {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            overflow: hidden;
+        }
+        .table-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 14px 20px;
+            border-bottom: 1px solid var(--border);
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .table-header h2 { font-size: 1rem; }
+
+        .badge {
+            font-size: 0.75rem;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            padding: 3px 10px;
+            border-radius: 20px;
+            color: var(--muted);
+        }
+
+        table { width: 100%; border-collapse: collapse; }
+        thead tr { background: var(--surface); }
+        th, td { padding: 12px 20px; text-align: center; font-size: 0.9rem; }
         th {
-            background-color: #2c3e50;
-            color: white;
+            color: var(--muted);
+            font-weight: 600;
+            font-size: 0.78rem;
+            text-transform: uppercase;
+            letter-spacing: .05em;
         }
+        tbody tr { border-top: 1px solid var(--border); transition: background .12s; }
+        tbody tr:hover { background: rgba(79,142,247,.07); }
 
-        tr:hover {
-            background-color: #f1f1f1;
+        .temp-val { color: #f4a261; }
+        .hum-val  { color: var(--accent2); }
+
+        .pagination {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 20px;
+            border-top: 1px solid var(--border);
+            flex-wrap: wrap;
+            gap: 10px;
         }
-
-        .container {
-            max-width: 900px;
-            margin: 0 auto;
+        .pagination-info { font-size: 0.82rem; color: var(--muted); }
+        .pagination-controls { display: flex; align-items: center; gap: 6px; }
+        .page-btn {
+            padding: 5px 12px;
+            border-radius: 7px;
+            border: 1px solid var(--border);
+            background: var(--surface);
+            color: var(--text);
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: background .15s, opacity .15s;
         }
+        .page-btn:hover:not(:disabled)    { background: var(--border); }
+        .page-btn:disabled                { opacity: .3; cursor: not-allowed; }
+        .page-btn.current                 { background: var(--accent); color: #fff; border-color: var(--accent); }
 
-        .refresh {
+        footer {
             text-align: center;
-            margin: 20px 0;
+            padding: 24px;
+            color: var(--muted);
+            font-size: 0.8rem;
         }
 
-        .last-update {
-            text-align: center;
-            color: #666;
-            font-size: 0.9em;
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-4px); }
+            to   { opacity: 1; transform: translateY(0); }
         }
+        .new-row { animation: fadeIn 0.4s ease; }
     </style>
 </head>
 
 <body>
-    <div class="container">
-        <h1>Monitor de Temperatura y Humedad - ESP32</h1>
 
-        <div class="refresh">
-            <button onclick="location.reload()">Actualizar Datos</button>
+<header>
+    <div>
+        <h1>Monitor ESP32 — Temperatura y Humedad</h1>
+        <span>DHT11 · Flask · SQLite</span>
+    </div>
+</header>
+
+<main>
+
+    <section class="metrics">
+        <div class="metric-card">
+            <div class="label">Ultima temperatura</div>
+            <div class="value temp" id="val-temp">
+                {% if lecturas %}{{ "%.1f"|format(lecturas[0].temperatura) }}°C{% else %}--{% endif %}
+            </div>
+            <div class="sub" id="val-temp-time">
+                {% if lecturas %}{{ lecturas[0].timestamp.strftime('%H:%M:%S') }}{% endif %}
+            </div>
+        </div>
+        <div class="metric-card">
+            <div class="label">Ultima humedad</div>
+            <div class="value hum" id="val-hum">
+                {% if lecturas %}{{ "%.1f"|format(lecturas[0].humedad) }}%{% else %}--{% endif %}
+            </div>
+            <div class="sub" id="val-hum-time">
+                {% if lecturas %}{{ lecturas[0].timestamp.strftime('%H:%M:%S') }}{% endif %}
+            </div>
+        </div>
+        <div class="metric-card">
+            <div class="label">Total de lecturas</div>
+            <div class="value inter" id="val-count">{{ lecturas|length }}</div>
+            <div class="sub">En la base de datos</div>
+        </div>
+        <div class="metric-card">
+            <div class="label">Intervalo actual</div>
+            <div class="value inter" id="intervalo-display">{{ intervalo }} s</div>
+            <div class="sub">Configurable abajo</div>
+        </div>
+    </section>
+
+    <section class="config-panel">
+        <h2>Configuracion del intervalo de muestreo</h2>
+        <div class="config-row">
+            <label for="nuevo-intervalo">Nuevo intervalo (seg, min. 5):</label>
+            <input type="number" id="nuevo-intervalo" min="5" max="3600" value="{{ intervalo }}">
+            <button class="btn btn-primary" onclick="actualizarIntervalo()">Aplicar</button>
+            <span id="config-msg">Intervalo actualizado</span>
+        </div>
+    </section>
+
+    <section class="table-wrap">
+        <div class="table-header">
+            <h2>Historial de lecturas</h2>
+            <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+                <div class="status-bar">
+                    <div class="status-dot" id="status-dot"></div>
+                    <span id="status-text">Conectando...</span>
+                </div>
+                <span class="badge" id="total-badge">0 registros</span>
+            </div>
         </div>
 
         <table>
             <thead>
                 <tr>
+                    <th>#</th>
                     <th>Fecha y Hora</th>
                     <th>Temperatura (°C)</th>
                     <th>Humedad (%)</th>
                 </tr>
             </thead>
-            <tbody>
-                {% for l in lecturas %}
+            <tbody id="readings-body">
+                {% for l in lecturas[:10] %}
                 <tr>
+                    <td>{{ loop.index }}</td>
                     <td>{{ l.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
-                    <td>{{ "%.1f" | format(l.temperatura) }}</td>
-                    <td>{{ "%.1f" | format(l.humedad) }}</td>
+                    <td class="temp-val">{{ "%.1f"|format(l.temperatura) }}</td>
+                    <td class="hum-val">{{ "%.1f"|format(l.humedad) }}</td>
+                </tr>
+                {% else %}
+                <tr id="empty-row">
+                    <td colspan="4" style="color:var(--muted); padding:30px;">
+                        Sin lecturas aun. Esperando datos de la ESP32...
+                    </td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
 
-        <div class="last-update">
-            Mostrando las últimas 50 lecturas •
-            <a href="#" onclick="location.reload(); return false;">Actualizar ahora</a>
+        <div class="pagination">
+            <span class="pagination-info" id="page-info">Pagina 1</span>
+            <div class="pagination-controls" id="page-controls"></div>
         </div>
-    </div>
-</body>
+    </section>
 
+</main>
+
+<footer>Sistema de Adquisicion de Datos · ESP32 + Flask</footer>
+
+<script>
+    const POLL_INTERVAL = 5000;
+    const PER_PAGE      = 10;
+
+    let allData  = [];
+    let lastId   = {{ lecturas[0].id if lecturas else 0 }};
+    let currentPage = 1;
+
+    const dot        = document.getElementById('status-dot');
+    const statusText = document.getElementById('status-text');
+    const pageInfo   = document.getElementById('page-info');
+    const pageCtrl   = document.getElementById('page-controls');
+    const totalBadge = document.getElementById('total-badge');
+
+    function setStatus(ok, text) {
+        dot.classList.toggle('active', ok);
+        statusText.textContent = text;
+    }
+
+    function totalPages() {
+        return Math.max(1, Math.ceil(allData.length / PER_PAGE));
+    }
+
+    function renderTable(isNew = false) {
+        const start  = (currentPage - 1) * PER_PAGE;
+        const slice  = allData.slice(start, start + PER_PAGE);
+        const tbody  = document.getElementById('readings-body');
+        const empty  = document.getElementById('empty-row');
+        if (empty) empty.remove();
+
+        tbody.innerHTML = slice.map((l, i) => `
+            <tr class="${isNew && i === 0 && currentPage === 1 ? 'new-row' : ''}">
+                <td>${start + i + 1}</td>
+                <td>${l.timestamp}</td>
+                <td class="temp-val">${l.temperatura.toFixed(1)}</td>
+                <td class="hum-val">${l.humedad.toFixed(1)}</td>
+            </tr>
+        `).join('') || `<tr><td colspan="4" style="color:var(--muted); padding:30px;">Sin lecturas aun.</td></tr>`;
+
+        renderPagination();
+    }
+
+    function renderPagination() {
+        const tp = totalPages();
+        pageInfo.textContent = `Pagina ${currentPage} de ${tp}`;
+        totalBadge.textContent = allData.length + ' registros';
+
+        const MAX_VISIBLE = 5;
+        let pages = [];
+        let start = Math.max(1, currentPage - Math.floor(MAX_VISIBLE / 2));
+        let end   = Math.min(tp, start + MAX_VISIBLE - 1);
+        if (end - start < MAX_VISIBLE - 1) start = Math.max(1, end - MAX_VISIBLE + 1);
+
+        for (let p = start; p <= end; p++) pages.push(p);
+
+        let html = `
+            <button class="page-btn" onclick="goPage(1)" ${currentPage === 1 ? 'disabled' : ''}>«</button>
+            <button class="page-btn" onclick="goPage(${currentPage - 1})" ${currentPage === 1 ? 'disabled' : ''}>‹</button>
+        `;
+        pages.forEach(p => {
+            html += `<button class="page-btn ${p === currentPage ? 'current' : ''}" onclick="goPage(${p})">${p}</button>`;
+        });
+        html += `
+            <button class="page-btn" onclick="goPage(${currentPage + 1})" ${currentPage === tp ? 'disabled' : ''}>›</button>
+            <button class="page-btn" onclick="goPage(${tp})" ${currentPage === tp ? 'disabled' : ''}>»</button>
+        `;
+        pageCtrl.innerHTML = html;
+    }
+
+    function goPage(p) {
+        const tp = totalPages();
+        currentPage = Math.max(1, Math.min(p, tp));
+        renderTable();
+    }
+
+    async function poll() {
+        try {
+            const res  = await fetch('/api/readings');
+            const data = await res.json();
+
+            if (!data.length) {
+                setStatus(true, 'Sin datos aun');
+                return;
+            }
+
+            const newest = data[0];
+            setStatus(true, 'Actualizado · ' + newest.timestamp.split(' ')[1]);
+
+            if (newest.id === lastId) return;
+
+            const wasNew = newest.id !== lastId;
+            lastId   = newest.id;
+            allData  = data;
+
+            document.getElementById('val-temp').textContent      = newest.temperatura.toFixed(1) + '°C';
+            document.getElementById('val-hum').textContent       = newest.humedad.toFixed(1) + '%';
+            document.getElementById('val-temp-time').textContent = newest.timestamp.split(' ')[1];
+            document.getElementById('val-hum-time').textContent  = newest.timestamp.split(' ')[1];
+            document.getElementById('val-count').textContent     = data.length;
+
+            if (currentPage === 1) {
+                renderTable(wasNew);
+            } else {
+                renderPagination();
+            }
+
+        } catch (e) {
+            setStatus(false, 'Sin conexion con el servidor');
+        }
+    }
+
+    async function actualizarIntervalo() {
+        const val = parseInt(document.getElementById('nuevo-intervalo').value);
+        if (isNaN(val) || val < 5) {
+            alert('El intervalo minimo es 5 segundos.');
+            return;
+        }
+        try {
+            const res  = await fetch('/api/config', {
+                method:  'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body:    JSON.stringify({ intervalo_segundos: val })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                document.getElementById('intervalo-display').textContent = val + ' s';
+                const msg = document.getElementById('config-msg');
+                msg.style.display = 'inline';
+                setTimeout(() => msg.style.display = 'none', 3000);
+            } else {
+                alert('Error: ' + data.error);
+            }
+        } catch (e) {
+            alert('Error de red: ' + e);
+        }
+    }
+
+    poll();
+    setInterval(poll, POLL_INTERVAL);
+</script>
+
+</body>
 </html>
